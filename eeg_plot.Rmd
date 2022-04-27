@@ -1,0 +1,50 @@
+---
+title: "eeg_plot"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+library(tidyverse)
+```
+
+```{r warning = FALSE, message = FALSE}
+library(reticulate)
+source_python("get_eeg_coords.py")
+coords <- get_eeg_coords()
+fnirs_eeg = "fnirs_eeg.csv" %>% 
+  read_csv2() %>% 
+  as_tibble() %>% 
+  select(channel, eeg_1 = eeg1, eeg_2 = eeg2)
+
+coords_1 = coords %>% 
+  select(eeg_1 = label, x_1 = x, y_1 = y)
+coords_2 = coords %>% 
+  select(eeg_2 = label, x_2 = x, y_2 = y)
+  
+data = fnirs_eeg %>% 
+  left_join(coords_1) %>% 
+  left_join(coords_2) %>% 
+  mutate(x = 0.5*(x_1 + x_2),
+         y = 0.5*(y_1 + y_2)) %>% 
+  select(label = channel, x, y)
+
+write_csv(data, "./coords_fNIRS.csv")
+``` 
+
+```{python}
+import matplotlib.pyplot as plt
+import pandas as pd
+plt.switch_backend('agg')
+
+from eeg_positions import get_elec_coords, plot_coords
+import pandas as pd
+coords = pd.read_csv("coords_fNIRS.csv")
+
+fig, ax = plot_coords(
+coords, scatter_kwargs=dict(color="red"), text_kwargs=dict(fontsize=8)
+)
+aux = ax.axis("off")
+fig
+```

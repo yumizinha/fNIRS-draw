@@ -1,0 +1,152 @@
+---
+title: "drawR"
+author: "Amanda Yumi Ambriola"
+date: "16/02/2021"
+output: html_document
+---
+
+# Configurando e instalando as bibliotecas no python:
+
+Instalar bibliotecas: eeg_positions
+No terminal, instalar python3 -m pip install eeg_positions, python3 -m pip install mne
+
+Chamar as bibliotecas no R. O reticulate ajuda a se livrar do Pandas, tidyverse é pra complicar sua vida ao entender o código:
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+use_python("/usr/local/bin/python")
+library(tidyverse)
+```
+
+
+
+
+Carrega os pontos das coordenadas:
+
+```{python}
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+from eeg_positions import get_elec_coords, plot_coords
+
+```
+
+
+## Visualização gráfica no 2D
+
+Seleciona as coordenadas e tipo de visualização no 2D:
+```{python}
+
+coords = get_elec_coords(
+    system="1010",
+    dim="2d",
+)
+
+```
+
+
+Exibe o head dos canais que foram selecionados:
+```{python}
+# `coords` is a pandas.DataFrame object. Imprime algumas:
+coords.head()
+
+```
+
+
+Faz o plot das coordenadas no mapa:
+```{python}
+fig, ax = plot_coords(
+    coords, scatter_kwargs=dict(color="green"), text_kwargs=dict(fontsize=10)
+)
+
+ax.axis("off")
+fig
+```
+
+
+## Visualização gráfica no 3D:
+
+Obs: Ainda está ruim mas é porque o matplotlib está incompatível com o 'eeg_positions'.
+Se não consertar o pacote, vou tentar configurar manualmente a escala pras cabeças não terem formato de ovo.
+
+Seleciona e plota as coordenadas e tipo de visualização no 3D:
+
+```{python}
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+from eeg_positions import get_elec_coords, plot_coords
+
+coords = get_elec_coords(system="1020", as_mne_montage=True)
+
+fig = coords.plot(kind="3d")
+fig.gca().view_init(azim=70, elev=15)
+fig
+```
+
+
+## Convertendo coordenadas de fNIRS para o mapa cerebral
+
+
+
+Para os canais de fnirs, eu criei um csv com os dados do canal de uma montagem específica de touca fNIRS e entre quais localizações do sistema 10-10 do EEG eles se localizam num csv (fnirs_eeg.csv). O conteúdo desse csv é uma tabela com:
+(num_canal_fnirs - primeiro ponto - segundo ponto).
+
+```{r warning = FALSE, message = FALSE}
+fnirs_data = as.data.frame(read_csv2("fnirs_eeg.csv"))
+head(fnirs_data)
+```
+
+
+Mostra o 'head' dos dados armazenados de coordenadas de EEG:
+```{r}
+source_python("get_eeg_coords.py")
+coords <- get_eeg_coords()
+head(coords)
+```
+
+Identifica as coordenadas cartesianas dos canais de EEG e calcula o ponto médio entre eles para pegar a localização dos canais de fNIRS e armazena num csv.
+
+
+```{r}
+N <- nrow(fnirs_data)
+X = matrix(NA, nrow = N, ncol = 2)
+Y = matrix(NA, nrow = N, ncol = 2)
+for(ii in 1:2)
+{
+  for(jj in 1:N)
+  {
+    idx = which(coords$label == fnirs_data[jj, 1+ii])
+    X[jj, ii] = coords$x[idx] 
+    Y[jj, ii] = coords$y[idx]
+  }
+}
+X = 0.5*(X[,1] + X[,2])
+Y = 0.5*(Y[,1] + Y[,2])
+
+fnirs_coords = data.frame(label = fnirs_data$channel,
+                          x = X,
+                          y = Y
+)
+write_csv(fnirs_coords, "./coords_fNIRS.csv")
+
+```
+
+
+Agora de volta para o código em Python, utiliza a biblioteca eeg_positions para a partir das posições salvas no csv plotar no gráfico 2D:
+
+```{python}
+import matplotlib.pyplot as plt
+import pandas as pd
+plt.switch_backend('agg')
+
+from eeg_positions import get_elec_coords, plot_coords
+coords = pd.read_csv("coords_fNIRS.csv")
+
+fig, ax = plot_coords(
+coords, scatter_kwargs=dict(color="red"), text_kwargs=dict(fontsize=8)
+)
+aux = ax.axis("off")
+fig
+```
+
+
